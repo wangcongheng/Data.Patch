@@ -18,7 +18,7 @@ BEGIN TRANSACTION;
 -----------------------------------------------------------------------------------------------------------------
 DECLARE  @correct_guid uniqueidentifier = '370D4557-C506-43AC-8E24-EB53B5DB71CE'	--KEYFIELD INTERNATIONAL BERHAD
 		,@wrong_guid uniqueidentifier	= '3608FCA9-C71D-40F0-9F05-32FF1DA1B07C'	--KEYFIELD INTERNATIONAL BHD
-		,@user_guid uniqueidentifier	= (SELECT user_guid FROM HSUSER WHERE login_name = 'qianpin')	--qianpin
+		,@user_guid uniqueidentifier	= (SELECT user_guid FROM HSUSER WHERE login_name = 'qianpin' AND is_deleted = '0')
 		,@correction_datetime datetime	= GETDATE()
 
 
