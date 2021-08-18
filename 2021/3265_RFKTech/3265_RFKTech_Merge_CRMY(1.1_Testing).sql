@@ -38,6 +38,12 @@ select * from entity_names where entity_guid in (@correct_guid, @wrong_guid)
 select * from ENTITY_SHAREHOLDING_ALL where relationship_guid IN ('836C12A3-5F6A-4F8A-B908-396FAEC748C5','1BDA94BB-16B0-4CAF-9956-EF56B8038FC0')
 --From Entity_Shareholder_All, there are no records for @wrong_guid
 
+select e.active_name, r.* from relationship r left join entity e on e.entity_guid = r.entity_to_guid where entity_from_guid = @correct_guid order by e.active_name
+select e.active_name, r.* from relationship r left join entity e on e.entity_guid = r.entity_to_guid where entity_from_guid = @wrong_guid
+select * from relationship_subtype
+/*
+@wrong_guid is Director of RFK TECHONOLOGIES and 2 other companies (SRI JENGKA SDN BHD, ROSZA HOME DECOR) but there are no relationships from @correct_guid to those, so need to check to be sure that we are changing the correct one
+*/
 select * from ketupat.dbo.Shareholder_ROC_ALL where vchcompanyno = '1289732' order by source_date
 
 select * from entity where active_name like '%RFK TECHNOLOGIES%'
@@ -65,7 +71,9 @@ select * from entity where active_name like '%RFK TECHNOLOGIES%'
 	9. Updates ##new_rel_source table with modification_id created in Step 6
 
 */
---There is no relationship for @wrong_guid
+--@wrong_guid has 2 other relationships that @correct_guid doesn't have
+--	Director of SRI JENGKA SDN BHD		(subtype = 4)  is_past_relationship = 1
+--	Business Owner of ROSZA HOME DECOR	(subtype = 98) is_past_relationship = 0
 
 /*	STEP 1 */
 SELECT new_rel_guid = NEWID(), *
@@ -95,7 +103,7 @@ SET  entity_from_guid	= IIF(entity_from_guid = @wrong_guid, @correct_guid, entit
 	,entity_to_guid		= IIF(entity_to_guid = @wrong_guid, @correct_guid, entity_to_guid)
 	,internal_comment	= CONCAT(internal_comment, char(13), CAST(GETDATE() as DATE),': copied from rel_guid (',relationship_guid,') due to merge in ',IIF(entity_from_guid=@wrong_guid,'entity_from','entity_to'))
 
-
+	select * from ##new_rel
 /*	STEP 4 */
 SELECT new_rel_guid, new_mod_id = NEWID(), m.*
 INTO ##mod
@@ -144,8 +152,6 @@ SELECT
 INTO ##entity_shareholding
 FROM ##new_rel r
 JOIN dbo.ENTITY_SHAREHOLDING_ALL a on a.relationship_guid = r.relationship_guid
-
-
 
 
 ------------------------------------------------------------------------
