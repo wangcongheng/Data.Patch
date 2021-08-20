@@ -1,10 +1,15 @@
 
+
+--======================================================
+--1.2 PATCHING
+--======================================================
+
 USE Ketupat_FE
 GO
 
-SET XACT_ABORT ON;  
-GO  
-BEGIN TRANSACTION; 
+SET XACT_ABORT ON;
+GO
+BEGIN TRANSACTION;
 
 /*
 	Process is split into 2 parts to clearly segregate the TESTING phases from the PATCHING phase
@@ -12,17 +17,18 @@ BEGIN TRANSACTION;
 		1.1 INVESTIGATION + PREPARATION
 			- Can run without modifying current tables/data
 		1.2 PATCHING
-			- Once above 2 sections have been verified, proceed to commit the changes into current database 
+			- Once above 2 sections have been verified, proceed to commit the changes into current database
 */
 
 -----------------------------------------------------------------------------------------------------------------
-declare  @correct_guid uniqueidentifier = 'EB66D3D1-AC3E-403B-92AB-61553A866E12'
-		,@wrong_guid uniqueidentifier = '1BDA94BB-16B0-4CAF-9956-EF56B8038FC0'
+DECLARE  @correct_guid uniqueidentifier = 'ECCCD44E-E3D1-4B97-B0F7-36A97150E845'	--Y SAFE SDN. BHD.
+		,@wrong_guid uniqueidentifier	= 'FCAE67ED-561F-4512-955D-70744FBED8C2'	--Y SAFE SDN BHD
 		,@user_guid uniqueidentifier	= (SELECT user_guid FROM HSUSER WHERE login_name = 'qianpin' AND is_deleted = '0')
 		,@correction_datetime datetime	= GETDATE()
 
 
---======================================================
+
+
 --INSERTION / UPDATING TABLES
 --======================================================
 
@@ -36,21 +42,21 @@ FROM ##entity_shareholding
 -- ======== ENTITY ======== --
 --Combined Soft Delete and update internal comment into 1 single update
 update Ketupat_FE.dbo.ENTITY
-set  
-	 workflow_state = '2' 
+set
+	 workflow_state = '2'
 	,internal_comment = CONCAT(internal_comment, char(13), CAST(@correction_datetime as DATE), ': Set to DELETED as part of merge with entity_guid (',@correct_guid,')')
 where entity_guid = @wrong_guid
 
 update Ketupat_FE.dbo.MODIFICATION
-set 
-	 modification_datetime  = @correction_datetime 
+set
+	 modification_datetime  = @correction_datetime
 	,modification_user		= @user_guid
 where id = (SELECT modification_info FROM ENTITY WHERE entity_guid = @wrong_guid)
 
 
 ------------------------------------------------------------------------
 -- ======== ENTITY_NAMES ======== --
-/* 	This generic code checks and merges the name aliases together, 
+/* 	This generic code checks and merges the name aliases together,
 	this inserts any name aliases from the discarded entity that are not found in the retained entity as inactive name aliases
 */
 INSERT INTO dbo.ENTITY_NAMES (is_active, name, language, startdate, enddate,entity_guid, source_guid)
@@ -64,14 +70,14 @@ AND NOT EXISTS (SELECT 1 FROM dbo.ENTITY_NAMES ew WHERE ew.entity_guid=@wrong_gu
 -- ======== RELATIONSHIP ======== --
 /* Soft Delete the @wrong_guid relationships */
 update Ketupat_FE.dbo.RELATIONSHIP
-set  
-	 workflow_state = '2' 
+set
+	 workflow_state = '2'
 	,internal_comment = CONCAT(internal_comment, char(13), CAST(@correction_datetime as DATE), ': Set to DELETED as part of merge with entity_guid (',@correct_guid,')')
 where entity_from_guid = @wrong_guid
 
 update Ketupat_FE.dbo.MODIFICATION
-set 
-	 modification_datetime  = @correction_datetime 
+set
+	 modification_datetime  = @correction_datetime
 	,modification_user		= @user_guid
 where id IN (SELECT modification_info FROM RELATIONSHIP WHERE entity_from_guid = @wrong_guid)
 
@@ -89,6 +95,11 @@ INSERT INTO dbo.RELATIONSHIP_SOURCE (relationship_source_guid, relationship_guid
 SELECT new_rs_guid, new_rel_guid, source_guid, modification_info, document_location, discovered_start_date, discovered_end_date, discovered_as_past_relationship, comment
 FROM ##new_rel_source
 
+
+Update ketupat_fe.dbo.relationship
+set is_past_relationship = 0
+where relationship_guid in ('836C12A3-5F6A-4F8A-B908-396FAEC748C5',
+'92ECD835-A30D-44F3-9277-BB23D2BCA38B')
 
 --======================================================
 --CLEAN UP
