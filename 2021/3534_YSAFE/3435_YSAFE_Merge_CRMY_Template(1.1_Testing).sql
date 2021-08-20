@@ -1,4 +1,9 @@
 
+--======================================================
+--1.1 INVESTIGATION + PREPARATION
+--======================================================
+
+
 USE Ketupat_FE
 GO
 
@@ -16,64 +21,64 @@ BEGIN TRANSACTION;
 */
 
 -----------------------------------------------------------------------------------------------------------------
-declare  @correct_guid uniqueidentifier = 'EB66D3D1-AC3E-403B-92AB-61553A866E12'
-		,@wrong_guid uniqueidentifier = '1BDA94BB-16B0-4CAF-9956-EF56B8038FC0'
+DECLARE  @correct_guid uniqueidentifier = 'ECCCD44E-E3D1-4B97-B0F7-36A97150E845'	--Y SAFE SDN. BHD.
+		,@wrong_guid uniqueidentifier	= 'FCAE67ED-561F-4512-955D-70744FBED8C2'	--Y SAFE SDN BHD
 		,@user_guid uniqueidentifier	= (SELECT user_guid FROM HSUSER WHERE login_name = 'qianpin' AND is_deleted = '0')
 		,@correction_datetime datetime	= GETDATE()
 
 
---======================================================
---INVESTIGATION  /  FINDINGS
---======================================================
 
---Can't tell which is the correct/wrong guid
-SELECT * FROM ENTITY WHERE ACTIVE_NAME LIKE '%ROSNI BINTI ZAHARI%'
-SELECT * FROM MODIFICATION WHERE id in ('DF00BBCF-E2D8-4009-B973-7E18F175B3F3','06201AE8-197E-4522-B5EF-A47AB7E02F6D')
-select e.active_name, r.* from relationship r
+-- INVESTIGATION
+-- =================================
+--IF RUN THE UBO SP, THE ENTITY_GUID AT degree=3 for MOHD YUSOF BIN HAJI NURIN is FCAE67ED-561F-4512-955D-70744FBED8C2
+--But it should be ECCCD44E-E3D1-4B97-B0F7-36A97150E845
+SELECT * FROM ENTITY WHERE ACTIVE_NAME = 'SAFEGUARDS G4S SDN BHD' --F22E21D3-121A-4E8D-8825-7B2941EEAE5C
+
+SELECT * FROM ENTITY WHERE ACTIVE_NAME LIKE 'Y SAFE%' --FCAE67ED-561F-4512-955D-70744FBED8C2
+
+--DEGREE 1
+SELECT e.active_name, r.* FROM RELATIONSHIP r 
 left join entity e on e.entity_guid = r.entity_from_guid
-where entity_to_guid = '984CA5D0-216C-4BFB-82BD-7E1E20516131'  and relationship_subtype_uid = '47'
+WHERE ENTITY_TO_GUID IN ('F22E21D3-121A-4E8D-8825-7B2941EEAE5C') --'FCAE67ED-561F-4512-955D-70744FBED8C2','ECCCD44E-E3D1-4B97-B0F7-36A97150E845'
 
-select * from entity_names where entity_guid in (@correct_guid, @wrong_guid)
+--DEGREE 2 (SAFEGUARDS CORPORATION SDN BHD)
+SELECT e.active_name, r.* FROM RELATIONSHIP r 
+left join entity e on e.entity_guid = r.entity_from_guid
+WHERE ENTITY_TO_GUID = 'F1F04B99-DECA-4954-8814-BCFB3A35ABD5'
 
-select * from ENTITY_SHAREHOLDING_ALL where relationship_guid IN ('836C12A3-5F6A-4F8A-B908-396FAEC748C5','1BDA94BB-16B0-4CAF-9956-EF56B8038FC0')
---From Entity_Shareholder_All, there are no records for @wrong_guid
+--DEGREE 2 (EIGHTH JEWELS SYSTEMS SDN BHD)
+SELECT e.active_name, r.* FROM RELATIONSHIP r 
+left join entity e on e.entity_guid = r.entity_from_guid
+WHERE ENTITY_TO_GUID = '6E189B2D-C5B9-4B9A-A074-0F0E49D288AD'
 
-select e.active_name, r.* from relationship r left join entity e on e.entity_guid = r.entity_to_guid where entity_from_guid = @correct_guid order by e.active_name
-select e.active_name, r.* from relationship r left join entity e on e.entity_guid = r.entity_to_guid where entity_from_guid = @wrong_guid
-select * from relationship_subtype
 /*
-@wrong_guid is Director of RFK TECHONOLOGIES and 2 other companies (SRI JENGKA SDN BHD, ROSZA HOME DECOR) but there are no relationships from @correct_guid to those, so need to check to be sure that we are changing the correct one
+* relationship_guid = '90FBC6C0-6D16-41C0-A085-C951925A2994', 
+* need to change the entity_from_guid to 'ECCCD44E-E3D1-4B97-B0F7-36A97150E845'
 */
-select * from ketupat.dbo.Shareholder_ROC_ALL where vchcompanyno = '1289732' order by source_date
 
-select * from entity where active_name like '%RFK TECHNOLOGIES%'
+--AND relationship_subtype_uid = '47'
 
-
---======================================================
---PREPARATION
---======================================================
+-- PREPARATION
+-- =================================
 -- ======== RELATIONSHIP ======== --
 /*	
 	STEPS
 	1. Creates a "duplicate" relationship with @correct_guid based on every existing entity_FROM_guid=@wrong_guid relationship
 		- Assigns a new @new_rel_guid for the created line(s)
-		- Stores into ##new_rel
+		- Stores into #new_rel
 	2. Creates a "duplicate" relationship with @correct_guid based on every existing entity_TO_guid=@wrong_guid relationship
 		- Assigns a new @new_rel_guid for the created line(s)
-		- Stores into ##new_rel
-	3. Updates ##new_rel to replace @wrong_guid with @correct_guid, adds respective internal_comment
-	4. Creates tmp MODIFICATION table ##mod 
+		- Stores into #new_rel
+	3. Updates #new_rel to replace @wrong_guid with @correct_guid, adds respective internal_comment
+	4. Creates tmp MODIFICATION table #mod 
 		- Assigns new MODIFICATION id for newly created NEW_RELATIONSHIP_GUID
-	5. Prepares respective RELATIONSHIP_SOURCE table into tmp table ##new_rel_source
+	5. Prepares respective RELATIONSHIP_SOURCE table into tmp table #new_rel_source
 	6. Assigns new MODIFICATION id for newly created NEW_RELATIONSHIP_SOURCE_GUID in Step 5
-	7. Updates ##mod with creation_datetime and creation_user
-	8. Updates ##new_rel table with modification_id created in Step 4
-	9. Updates ##new_rel_source table with modification_id created in Step 6
+	7. Updates #mod with creation_datetime and creation_user
+	8. Updates #new_rel table with modification_id created in Step 4
+	9. Updates #new_rel_source table with modification_id created in Step 6
 
 */
---@wrong_guid has 2 other relationships that @correct_guid doesn't have
---	Director of SRI JENGKA SDN BHD		(subtype = 4)  is_past_relationship = 1
---	Business Owner of ROSZA HOME DECOR	(subtype = 98) is_past_relationship = 0
 
 /*	STEP 1 */
 SELECT new_rel_guid = NEWID(), *
@@ -103,7 +108,7 @@ SET  entity_from_guid	= IIF(entity_from_guid = @wrong_guid, @correct_guid, entit
 	,entity_to_guid		= IIF(entity_to_guid = @wrong_guid, @correct_guid, entity_to_guid)
 	,internal_comment	= CONCAT(internal_comment, char(13), CAST(GETDATE() as DATE),': copied from rel_guid (',relationship_guid,') due to merge in ',IIF(entity_from_guid=@wrong_guid,'entity_from','entity_to'))
 
-	select * from ##new_rel
+
 /*	STEP 4 */
 SELECT new_rel_guid, new_mod_id = NEWID(), m.*
 INTO ##mod
@@ -121,7 +126,6 @@ INSERT INTO ##mod
 SELECT rs.new_rs_guid,NEWID(), m.*
 FROM ##new_rel_source rs
 JOIN dbo.MODIFICATION m on m.id=rs.modification_info
-
 
 /*	STEP 7 */
 UPDATE ##mod
@@ -152,6 +156,8 @@ SELECT
 INTO ##entity_shareholding
 FROM ##new_rel r
 JOIN dbo.ENTITY_SHAREHOLDING_ALL a on a.relationship_guid = r.relationship_guid
+
+
 
 
 ------------------------------------------------------------------------
